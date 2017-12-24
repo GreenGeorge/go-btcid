@@ -152,6 +152,7 @@ func (c *Client) newPubReq(endpoint string) ([]byte, error) {
 	return body, nil
 }
 
+// GetTicker fetches the latest ticker data from the API
 func (c *Client) GetTicker() (Ticker, error) {
 	body, err := c.newPubReq("/btc_idr/ticker")
 	if err != nil {
@@ -168,6 +169,7 @@ func (c *Client) GetTicker() (Ticker, error) {
 	return ticker.Ticker, nil
 }
 
+// GetTrades fetches the latest market trade data from the API
 func (c *Client) GetTrades() ([]Trade, error) {
 	body, err := c.newPubReq("/btc_idr/trades")
 	if err != nil {
@@ -181,6 +183,7 @@ func (c *Client) GetTrades() ([]Trade, error) {
 	return trades, nil
 }
 
+// GetDepth fetches the market cap data from the API
 func (c *Client) GetDepth() (Depth, error) {
 	body, err := c.newPubReq("/btc_idr/depth")
 	if err != nil {
