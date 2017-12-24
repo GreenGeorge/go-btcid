@@ -150,7 +150,6 @@ func (c *Client) newPubReq(endpoint string) ([]byte, error) {
 	}
 
 	return body, nil
-
 }
 
 func (c *Client) GetTicker() (Ticker, error) {
@@ -195,15 +194,16 @@ func (c *Client) GetDepth() (Depth, error) {
 	return depth, nil
 }
 
+// GetInfo fetches an account's information details
 func (c *Client) GetInfo() (UserInfo, error) {
 	body, err := c.newPrvReq(prvMethodGetInfo)
 	if err != nil {
 		fmt.Println("Req error")
 	}
-	InfoRes := InfoRes{}
-	err = json.Unmarshal(body, &InfoRes)
+	infoRes := InfoRes{}
+	err = json.Unmarshal(body, &infoRes)
 	if err != nil {
 		fmt.Println("Info error", err)
 	}
-	return InfoRes.Return, nil
+	return infoRes.Return, nil
 }
