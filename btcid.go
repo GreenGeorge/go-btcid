@@ -17,7 +17,9 @@ import (
 )
 
 const (
-	domain               = "https://vip.bitcoin.co.id"
+	baseURL              = "https://vip.bitcoin.co.id"
+	pubAPIEndpoint       = "/api"
+	privAPIEndpoint      = "/tapi"
 	endpointTicker       = "/ticker"
 	pairBTCIDR           = "/btc_idr"
 	pairETHIDR           = "/eth_idr"
@@ -33,11 +35,17 @@ const (
 )
 
 var (
-	publicAPIBaseURL     = fmt.Sprintf("%s/api", domain)
-	privateAPIBaseURL    = fmt.Sprintf("%s/tapi", domain)
 	endpointBTCIDRTicker = fmt.Sprintf("%s%s", pairBTCIDR, endpointTicker)
 	endpointETHIDRTicker = fmt.Sprintf("%s%s", pairETHIDR, endpointTicker)
 )
+
+// Client holds the credentials and config for the BTCID client
+type Client struct {
+	APIKey     string
+	Secret     string
+	Domain     string
+	HTTPClient *http.Client
+}
 
 type Ticker struct {
 	High string `json:"high"`
@@ -60,12 +68,6 @@ type Depth struct {
 	Sell [][]interface{} `json:"sell"`
 }
 
-type Client struct {
-	apiKey     string
-	secret     string
-	httpClient *http.Client
-}
-
 type UserInfo struct {
 	Balance        map[string]interface{} `json:"balance"`
 	BalanceHold    map[string]interface{} `json:"balance_hold"`
@@ -82,6 +84,21 @@ type InfoRes struct {
 	Return  UserInfo `json:"return"`
 }
 
+// New assembles a new BTCID client struct.
+// an http client can be passed to be shared if there is an underlying client existing.
+// if nil is passed as a client, a default client will be set up
+func New(APIKey, Secret string, HTTPClient *http.Client) Client {
+	if HTTPClient == nil {
+		HTTPClient = http.DefaultClient
+	}
+	return Client{
+		APIKey:     APIKey,
+		Secret:     Secret,
+		HTTPClient: HTTPClient,
+		Domain:     baseURL,
+	}
+}
+
 func (c *Client) newPrvReq(PrivateMethod string) ([]byte, error) {
 	// Prepare variables for signing and sending
 	nonce := strconv.FormatInt(time.Now().Unix(), 10)
@@ -93,26 +110,27 @@ func (c *Client) newPrvReq(PrivateMethod string) ([]byte, error) {
 	queryString := q.Encode()
 
 	// Setup Request
-	req, err := http.NewRequest(http.MethodPost, privateAPIBaseURL, strings.NewReader(queryString))
+	url := fmt.Sprintf("%s%s", c.Domain, privAPIEndpoint)
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(queryString))
 	if err != nil {
 		log.Print(err)
 		return nil, err
 	}
 
 	// Sign request
-	hmac512 := hmac.New(sha512.New, []byte(c.secret))
+	hmac512 := hmac.New(sha512.New, []byte(c.Secret))
 	hmac512.Write([]byte(queryString))
 	signature := hex.EncodeToString(hmac512.Sum(nil))
 
 	// Set headers
-	req.Header.Set("Key", c.apiKey)
+	req.Header.Set("Key", c.APIKey)
 	req.Header.Set("Sign", signature)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Execute request
-	res, err := c.httpClient.Do(req)
+	res, err := c.HTTPClient.Do(req)
 	if err != nil {
-		fmt.Println("Res error")
+		fmt.Println("Res error", err)
 		return nil, err
 	}
 
@@ -120,7 +138,7 @@ func (c *Client) newPrvReq(PrivateMethod string) ([]byte, error) {
 	body, err := ioutil.ReadAll(res.Body)
 	defer res.Body.Close()
 	if err != nil {
-		fmt.Println("Read error")
+		fmt.Println("Read error", err)
 		return nil, err
 	}
 
@@ -128,24 +146,24 @@ func (c *Client) newPrvReq(PrivateMethod string) ([]byte, error) {
 }
 
 func (c *Client) newPubReq(endpoint string) ([]byte, error) {
-	url := fmt.Sprintf("%s%s", publicAPIBaseURL, endpoint)
+	url := fmt.Sprintf("%s%s%s", c.Domain, pubAPIEndpoint, endpoint)
 	payload := bytes.NewBuffer([]byte{})
 	req, err := http.NewRequest(http.MethodGet, url, payload)
 	if err != nil {
-		fmt.Println("Req error", err.Error())
+		fmt.Println("Req error", err)
 		return nil, err
 	}
 
-	res, err := c.httpClient.Do(req)
+	res, err := c.HTTPClient.Do(req)
 	if err != nil {
-		fmt.Println("Res error")
+		fmt.Println("Res error", err)
 		return nil, err
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
 	defer res.Body.Close()
 	if err != nil {
-		fmt.Println("Read error")
+		fmt.Println("Read error", err)
 		return nil, err
 	}
 
@@ -173,7 +191,7 @@ func (c *Client) GetTicker() (Ticker, error) {
 func (c *Client) GetTrades() ([]Trade, error) {
 	body, err := c.newPubReq("/btc_idr/trades")
 	if err != nil {
-		fmt.Println("Req error")
+		fmt.Println("Req error", err)
 	}
 	trades := []Trade{}
 	err = json.Unmarshal(body, &trades)
@@ -187,7 +205,7 @@ func (c *Client) GetTrades() ([]Trade, error) {
 func (c *Client) GetDepth() (Depth, error) {
 	body, err := c.newPubReq("/btc_idr/depth")
 	if err != nil {
-		fmt.Println("Req error")
+		fmt.Println("Req error", err)
 	}
 	depth := Depth{}
 	err = json.Unmarshal(body, &depth)
@@ -201,7 +219,7 @@ func (c *Client) GetDepth() (Depth, error) {
 func (c *Client) GetInfo() (UserInfo, error) {
 	body, err := c.newPrvReq(prvMethodGetInfo)
 	if err != nil {
-		fmt.Println("Req error")
+		fmt.Println("Req error", err)
 	}
 	infoRes := InfoRes{}
 	err = json.Unmarshal(body, &infoRes)
